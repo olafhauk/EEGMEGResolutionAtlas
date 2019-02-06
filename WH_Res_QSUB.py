@@ -21,102 +21,179 @@ job_list = \
     #####
     # COMPUTING and MORPHING Sensitivity Maps
     #####
-    # {'N':   'R_SMap',                                       # job name
-    #  'Py':  'WH_SensitivityMaps',                         # Python script
+    {'N':   'R_SMap',                                       # job name
+     'Py':  'WH_Res_SensitivityMaps',                         # Python script
+     'Cf':  'WH_MNE_Resolution_config',                     # configuration script
+     'Ss':  subjs,                                          # subject indices
+     'mem': '1GB',                                          # memory for qsub process
+     'dep': '',
+     'var': '"RMS"'}, # variable string for python script (e.g. for filenames)},                                             # name of preceeding process (optional)
+    {'N':   'R_MphSM',                                      # job name
+     'Py':  'WH_Res_MorphSTC_SMap',                              # Python script
+     'Cf':  'WH_MNE_Resolution_config',                     # configuration script
+     'Ss':  subjs,                                          # subject indices
+     'mem': '1GB',                                          # memory for qsub process
+     'dep': 'R_SMap',
+     'var': '"RMS"'},               # additional variables for python script (optional)
+    # #####
+    # # AVERAGING Sensitivity Maps
+    # #####
+    # ### The following depends on completion of previous jobs for ALL subjects
+    # {'N':   'R_AvgMphSMap',                                     # job name
+    #  'Py':  'WH_Res_AvgSTCs_SMaps',                               # Python script
     #  'Cf':  'WH_MNE_Resolution_config',                     # configuration script
-    #  'Ss':  subjs,                                          # subject indices
+    #  'Ss':  [''],                                           # subject indices, '' if across all subjects
     #  'mem': '2GB',                                          # memory for qsub process
     #  'dep': '',
-    #  'var': 'SensMap RMS'} # variable string for python script (e.g. for filenames)},                                             # name of preceeding process (optional)
-    # {'N':   'R_MphSM',                                      # job name
-    #  'Py':  'WH_Res_MorphSTC',                              # Python script
-    #  'Cf':  'WH_MNE_Resolution_config',                     # configuration script
-    #  'Ss':  subjs,                                          # subject indices
-    #  'mem': '2GB',                                          # memory for qsub process
-    #  'dep': '',
-    #  'var': '"SensitivityMaps SensMap SNR"'},               # additional variables for python script (optional)
+    #  'var': '"SensitivityMaps RMS"'},
+    
+    #####
+    # COMPUTING Resolution Metrics
+    #####
+    {'N':   'R_LocErrPeak',                                    # job name
+     'Py':  'WH_Res_ResolutionMetrics',                     # Python script
+     'Cf':  'WH_MNE_Resolution_config',                     # configuration script
+     'Ss':  subjs,                                          # subject indices
+     'mem': '1GB',                                          # memory for qsub process
+     'var': '"locerr peak"',
+     'dep': ''},
+
+     {'N':   'R_LocErrCOG',                                    # job name
+     'Py':  'WH_Res_ResolutionMetrics',                     # Python script
+     'Cf':  'WH_MNE_Resolution_config',                     # configuration script
+     'Ss':  subjs,                                          # subject indices
+     'mem': '1GB',                                          # memory for qsub process
+     'var': '"locerr cog"',
+     'dep': ''},
+
+     {'N':   'R_WidthSD',                                    # job name
+     'Py':  'WH_Res_ResolutionMetrics',                     # Python script
+     'Cf':  'WH_MNE_Resolution_config',                     # configuration script
+     'Ss':  subjs,                                          # subject indices
+     'mem': '1GB',                                          # memory for qsub process
+     'var': '"width sd"',
+     'dep': ''},
+    
+    {'N':   'R_WidthMR',                                    # job name
+     'Py':  'WH_Res_ResolutionMetrics',                     # Python script
+     'Cf':  'WH_MNE_Resolution_config',                     # configuration script
+     'Ss':  subjs,                                          # subject indices
+     'mem': '1GB',                                          # memory for qsub process
+     'var': '"width maxrad"',
+     'dep': ''},
+    
+    {'N':   'R_AmpSum',                                    # job name
+     'Py':  'WH_Res_ResolutionMetrics',                     # Python script
+     'Cf':  'WH_MNE_Resolution_config',                     # configuration script
+     'Ss':  subjs,                                          # subject indices
+     'mem': '1GB',                                          # memory for qsub process
+     'var': '"amplitude sum"',
+     'dep': ''}, 
+
+    {'N':   'R_AmpPeak',                                    # job name
+     'Py':  'WH_Res_ResolutionMetrics',                     # Python script
+     'Cf':  'WH_MNE_Resolution_config',                     # configuration script
+     'Ss':  subjs,                                          # subject indices
+     'mem': '1GB',                                          # memory for qsub process
+     'var': '"amplitude peak"',
+     'dep': ''},
+    
+    #####
+    # MORPHING Resolution Metrics
+    #####
+    {'N':   'R_MphLocErrPeak',                                     # job name
+     'Py':  'WH_Res_MorphSTC',                              # Python script
+     'Cf':  'WH_MNE_Resolution_config',                     # configuration script
+     'Ss':  subjs,                                          # subject indices
+     'mem': '2GB',                                          # memory for qsub process
+     'dep': 'R_LocErrPeak',
+     'var': '"ResolutionMetrics locerr_peak"'},
+
+     {'N':   'R_MphLocErrCOG',                                     # job name
+     'Py':  'WH_Res_MorphSTC',                              # Python script
+     'Cf':  'WH_MNE_Resolution_config',                     # configuration script
+     'Ss':  subjs,                                          # subject indices
+     'mem': '2GB',                                          # memory for qsub process
+     'dep': 'R_LocErrCOG',
+     'var': '"ResolutionMetrics locerr_cog"'},
+    
+    {'N':   'R_MphWidthSD',                                     # job name
+     'Py':  'WH_Res_MorphSTC',                              # Python script
+     'Cf':  'WH_MNE_Resolution_config',                     # configuration script
+     'Ss':  subjs,                                          # subject indices
+     'mem': '2GB',                                          # memory for qsub process
+     'dep': 'R_WidthSD',
+     'var': '"ResolutionMetrics width_sd"'},
+
+    {'N':   'R_MphWidthMR',                                     # job name
+     'Py':  'WH_Res_MorphSTC',                              # Python script
+     'Cf':  'WH_MNE_Resolution_config',                     # configuration script
+     'Ss':  subjs,                                          # subject indices
+     'mem': '2GB',                                          # memory for qsub process
+     'dep': 'R_WidthMR',
+     'var': '"ResolutionMetrics width_maxrad"'},
+    
+    {'N':   'R_MphAmpSum',                                     # job name
+     'Py':  'WH_Res_MorphSTC',                              # Python script
+     'Cf':  'WH_MNE_Resolution_config',                     # configuration script
+     'Ss':  subjs,                                          # subject indices
+     'mem': '2GB',                                          # memory for qsub process
+     'dep': 'R_AmpSum',
+     'var': '"ResolutionMetrics amplitude_sum"'},
+
+    {'N':   'R_MphAmpPeak',                                     # job name
+     'Py':  'WH_Res_MorphSTC',                              # Python script
+     'Cf':  'WH_MNE_Resolution_config',                     # configuration script
+     'Ss':  subjs,                                          # subject indices
+     'mem': '2GB',                                          # memory for qsub process
+     'dep': 'R_AmpPeak',
+     'var': '"ResolutionMetrics amplitude_peak"'}
     
     # #####
-    # # COMPUTING Resolution Metrics
+    # # AVERAGING Resolution Metrics
     # #####
-    # {'N':   'R_locerr',                                    # job name
-    #  'Py':  'WH_Res_ResolutionMetrics',                     # Python script
+    # ### The following depend on completion of previous jobs for ALL subjects
+    # {'N':   'R_AvgMphLocErr',                                     # job name
+    #  'Py':  'WH_Res_AvgSTCs',                               # Python script
     #  'Cf':  'WH_MNE_Resolution_config',                     # configuration script
-    #  'Ss':  subjs,                                          # subject indices
-    #  'mem': '2GB',                                          # memory for qsub process
-    #  'var': '"locerr peak"',
-    #  'dep': ''},
-    
-    # {'N':   'R_width',                                    # job name
-    #  'Py':  'WH_Res_ResolutionMetrics',                     # Python script
-    #  'Cf':  'WH_MNE_Resolution_config',                     # configuration script
-    #  'Ss':  subjs,                                          # subject indices
-    #  'mem': '2GB',                                          # memory for qsub process
-    #  'var': '"width sd"',
-    #  'dep': ''},
-    
-    # {'N':   'R_amp',                                    # job name
-    #  'Py':  'WH_Res_ResolutionMetrics',                     # Python script
-    #  'Cf':  'WH_MNE_Resolution_config',                     # configuration script
-    #  'Ss':  subjs,                                          # subject indices
-    #  'mem': '2GB',                                          # memory for qsub process
-    #  'var': '"amplitude peak"',
-    #  'dep': ''}, 
-    
-    # #####
-    # # MORPHING Resolution Metrics
-    # #####
-    # {'N':   'R_MphLocErr',                                     # job name
-    #  'Py':  'WH_Res_MorphSTC',                              # Python script
-    #  'Cf':  'WH_MNE_Resolution_config',                     # configuration script
-    #  'Ss':  subjs,                                          # subject indices
-    #  'mem': '2GB',                                          # memory for qsub process
-    #  'dep': 'R_locerr',
+    #  'Ss':  [''],                                           # subject indices, '' if across all subjects
+    #  'mem': '1GB',                                          # memory for qsub process
     #  'var': '"ResolutionMetrics locerr_peak"'},
-    
-    # {'N':   'R_MphWidth',                                     # job name
-    #  'Py':  'WH_Res_MorphSTC',                              # Python script
+
+    # {'N':   'R_AvgMphLocErr',                                     # job name
+    #  'Py':  'WH_Res_AvgSTCs',                               # Python script
     #  'Cf':  'WH_MNE_Resolution_config',                     # configuration script
-    #  'Ss':  subjs,                                          # subject indices
-    #  'mem': '2GB',                                          # memory for qsub process
-    #  'dep': 'R_width',
+    #  'Ss':  [''],                                           # subject indices, '' if across all subjects
+    #  'mem': '1GB',                                          # memory for qsub process
+    #  'var': '"ResolutionMetrics locerr_cog"'},
+
+    # {'N':   'R_AvgMphWidth',                                     # job name
+    #  'Py':  'WH_Res_AvgSTCs',                               # Python script
+    #  'Cf':  'WH_MNE_Resolution_config',                     # configuration script
+    #  'Ss':  [''],                                           # subject indices, '' if across all subjects
+    #  'mem': '1GB',                                          # memory for qsub process
     #  'var': '"ResolutionMetrics width_sd"'},
     
-    # {'N':   'R_MphAmp',                                     # job name
-    #  'Py':  'WH_Res_MorphSTC',                              # Python script
+    # {'N':   'R_AvgMphWidth',                                     # job name
+    #  'Py':  'WH_Res_AvgSTCs',                               # Python script
     #  'Cf':  'WH_MNE_Resolution_config',                     # configuration script
-    #  'Ss':  subjs,                                          # subject indices
-    #  'mem': '2GB',                                          # memory for qsub process
-    #  'dep': 'R_amp',
+    #  'Ss':  [''],                                           # subject indices, '' if across all subjects
+    #  'mem': '1GB',                                          # memory for qsub process
+    #  'var': '"ResolutionMetrics width_maxrad"'},
+    
+    # {'N':   'R_AvgMphAmp',                                     # job name
+    #  'Py':  'WH_Res_AvgSTCs',                               # Python script
+    #  'Cf':  'WH_MNE_Resolution_config',                     # configuration script
+    #  'Ss':  [''],                                           # subject indices, '' if across all subjects
+    #  'mem': '1GB',                                          # memory for qsub process
+    #  'var': '"ResolutionMetrics amplitude_sum"'},
+
+    #  {'N':   'R_AvgMphAmp',                                     # job name
+    #  'Py':  'WH_Res_AvgSTCs',                               # Python script
+    #  'Cf':  'WH_MNE_Resolution_config',                     # configuration script
+    #  'Ss':  [''],                                           # subject indices, '' if across all subjects
+    #  'mem': '1GB',                                          # memory for qsub process
     #  'var': '"ResolutionMetrics amplitude_peak"'}
-    
-    #####
-    # AVERAGING Resolution Metrics
-    #####
-    ### The following depend on completion of previous jobs for ALL subjects
-    {'N':   'R_AvgMphLocErr',                                     # job name
-     'Py':  'WH_Res_AvgSTCs',                               # Python script
-     'Cf':  'WH_MNE_Resolution_config',                     # configuration script
-     'Ss':  [''],                                           # subject indices, '' if across all subjects
-     'mem': '2GB',                                          # memory for qsub process
-     'dep': '',
-     'var': '"ResolutionMetrics locerr_peak"'},
-    
-    {'N':   'R_AvgMphWidth',                                     # job name
-     'Py':  'WH_Res_AvgSTCs',                               # Python script
-     'Cf':  'WH_MNE_Resolution_config',                     # configuration script
-     'Ss':  [''],                                           # subject indices, '' if across all subjects
-     'mem': '2GB',                                          # memory for qsub process
-     'dep': '',
-     'var': '"ResolutionMetrics width_sd"'},
-    
-    {'N':   'R_AvgMphAmp',                                     # job name
-     'Py':  'WH_Res_AvgSTCs',                               # Python script
-     'Cf':  'WH_MNE_Resolution_config',                     # configuration script
-     'Ss':  [''],                                           # subject indices, '' if across all subjects
-     'mem': '2GB',                                          # memory for qsub process
-     'dep': '',
-     'var': '"ResolutionMetrics amplitude_peak"'}
 ]
 
 # directory where python scripts are

@@ -78,43 +78,79 @@ if not op.exists(fname_avg):
 
 for modality in ['EEGMEG', 'MEG', 'EEG', 'EEGMEG-MEG', 'EEGMEG-EEG']: # EEG/MEG/EEGMEG
 
-    for inv_type in C.res_inv_types: # 'MNE', 'LCMV' etc.
+    # contrasts for inverse methods only computed for EEGMEG
+    if modality == 'EEGMEG':
+
+        res_inv_types = C.res_inv_types + ['MNE-dSPM', 'MNE-sLORETA', 'dSPM-sLORETA',
+                                            'MNE-LCMV', 'dSPM-LCMV', 'sLORETA-LCMV', 'MNE-MNE40', 'MNE-MNE80']
+
+    else:
+
+        res_inv_types = C.res_inv_types
+
+    for inv_type in res_inv_types: # 'MNE', 'LCMV' etc.
 
         # for CTFs and PSFs
         for functype in ['CTF', 'PSF']:
 
-            stcs = [] # Will contain STCs per subject for averaging
+            # iterate over inverse operator types
+                for loose in C.inv_loose: # orientation constraint
 
-            mytext = functype + '_' + inv_type + '_' + stc_type + '_' + modality
+                    for depth in C.inv_depth: # depth weighting
 
-            if metric != '':
+                        stcs = [] # Will contain STCs per subject for averaging
 
-                mytext = mytext + '_' + metric
+                        if loose == None: loose = 0
 
-            for sbj in C.subjs:
+                        loo_str = '_loo%s' % str(int(100*loose))
 
-                subject = 'Sub%02d' % sbj                
+                        if depth == None: depth = 0
 
-                fname_morph = C.fname_STC(C, stc_path, subject, mytext + '_mph')
+                        dep_str = '_dep%s' % str(int(100*depth))
 
-                # read existing source estimate
-                print('Reading: %s.' % fname_morph)
-                stc = mne.read_source_estimate(fname_morph, subject)
+                        if inv_type[:7] == 'MNE-MNE': # exception for depth-weighted MNE
 
-                stcs.append(stc)
+                            mytext = functype + '_' + inv_type + '_' + stc_type + '_' + modality + loo_str
 
-            # average STCs across subjects
-            print('Averaging %d STC files.' % len(stcs))
+                        else:
 
-            avg = np.average([s.data for s in stcs], axis=0)
+                            mytext = functype + '_' + inv_type + '_' + stc_type + '_' + modality + loo_str + dep_str
 
-            # turn average into source estimate object
-            avg_stc = mne.SourceEstimate(avg, stcs[0].vertices, stcs[0].tmin, stcs[0].tstep)
+                        if metric != '':
 
-            fname_avg = C.fname_STC(C, stc_path, C.stc_morph, mytext)
+                            mytext = mytext + '_' + metric
 
-            print('###\nWriting grand-average STC file %s.\n###' % fname_avg)
+                        for sbj in C.subjs:
 
-            avg_stc.save(fname_avg)
+                            subject = 'Sub%02d' % sbj                
 
+                            fname_morph = C.fname_STC(C, stc_path, subject, mytext + '_mph')
+
+                            # read existing source estimate
+                            print('Reading: %s.' % fname_morph)
+                            stc = mne.read_source_estimate(fname_morph, subject)
+
+                            stcs.append(stc)
+
+                        # average STCs across subjects
+                        print('Averaging %d STC files.' % len(stcs))
+
+                        avg = np.average([s.data for s in stcs], axis=0)
+
+                        # turn average into source estimate object
+                        avg_stc = mne.SourceEstimate(avg, stcs[0].vertices, stcs[0].tmin, stcs[0].tstep)
+
+                        fname_avg = C.fname_STC(C, stc_path, C.stc_morph, mytext)
+
+                        print('###\nWriting grand-average STC file %s.\n###' % fname_avg)
+
+                        avg_stc.save(fname_avg)
+
+                        if inv_type[:7] == 'MNE-MNE': # depth-weighted MNE only for one depth
+
+                            break
+
+                    if inv_type[:7] == 'MNE-MNE': # depth-weighted MNE only for one loose
+
+                        break
 # Done

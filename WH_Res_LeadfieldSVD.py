@@ -1,11 +1,11 @@
 """
 =========================================================
-Compute whole-brain sensitivity maps for WH data set.
-E.g.: run WH_Res_SensitivityMaps.py WH_MNE_Resolution_config 13 RMS
+Compute singular values for whitened leadfields, for all subjects.
+E.g.: run WH_Res_LeadfieldSVD.py WH_MNE_Resolution_config
 =========================================================
 
 """
-# OH, July 2018
+# OH, September 2018
 
 print __doc__
 
@@ -43,39 +43,21 @@ reload(C)
 R = importlib.import_module('WH_Resolution_Functions')
 reload(R)
 
-# get subject ID to process
-# qsub start at 0, thus +1 here
-sbj_ids = [int(sys.argv[2]) + 1]
+# subjects to process
+sbj_ids = C.subjs
 
 # for filenames
 st_duration = C.res_st_duration
 origin = C.res_origin
 
-# read variables specified via qsub
-if len(sys.argv)>3: # if additional variable specified
-
-    metric = sys.argv[3] # (e.g. 'RMS', 'SNR')
-
-else:
-
-    metric = 'RMS'
-
-print('Metric: %s.\n' % metric)
-
+# dict for modalities, will contain lists across subjects
+sing_vals = {'EEGMEG': [], 'MEG': [], 'EEG': []}
 
 for sbj in sbj_ids:
 
     subject = 'Sub%02d' % sbj
 
     print('###\nWorking hard on %s.\n###' % (subject))
-
-    fname_stc = C.fname_STC(C, 'SensitivityMaps', subject, '')
-
-    # create output path if necessary
-    if not os.path.exists(fname_stc):
-
-        os.mkdir(fname_stc)
-
 
     fwd_fname = C.fname_ForwardSolution(C, subject, 'EEGMEG')
 
@@ -94,8 +76,6 @@ for sbj in sbj_ids:
     print('###\nReading noise covariance matrix from: %s.\n###' % (fname_cov))
 
     noise_cov = mne.read_cov(fname_cov)
-
-    stcs = {} # will contain metric distribution as STC
 
     # iterate over different combinations of sensors
     for (eeg,meg,modal) in [(True,True,'EEGMEG'), (False,True,'MEG'), (True,False,'EEG')]:
@@ -117,50 +97,16 @@ for sbj in sbj_ids:
             noise_cov_use = mne.cov.regularize(noise_cov_use, info, mag=C.res_lambda_empirical['mag'],
                                                     grad=C.res_lambda_empirical['grad'], eeg=C.res_lambda_empirical['eeg'])
         
-        # Sensitivity maps with diagnonal noise covariance matrix
-        stc = R.sensitivity_map(fwd_use, noise_cov_use, diag=True, metric=metric, maxnorm=True)
+        # SVD of (diagonally) whitened leadfield
+        s = R.leadfield_svd(fwd_use, noise_cov_use, diag=True)        
 
-        stcs[modal] = stc
+        sing_vals[modal].append(s)
 
-        fname_stc = C.fname_STC(C, 'SensitivityMaps', subject, 'SensMap_' + modal + '_' + metric)
+for modal in ['EEGMEG', 'MEG', 'EEG']:
 
-        print('###\nWriting STC file to: %s.\n###' % (fname_stc))
+    fname_txt = C.fname_STC(C, 'SensitivityMaps', '', modal + '_SVD.txt')
 
-        stc.save(fname_stc)
-
-    print('###\nContrasting modalities.\n###')
-
-    for (modal1,modal2) in [('EEGMEG', 'MEG'), ('EEGMEG', 'EEG'), ('MEG','EEG')]:
-
-        if metric == 'RMS':
-            
-            print('Ratio for RMS.')
-            stc_contr = stcs[modal1] / stcs[modal2]
-
-        elif metric == 'SNR':
-
-            print('Difference for SNR.')
-            stc_contr = stcs[modal1] - stcs[modal2]
-
-        # stc_diff = R.normalise_stc(stc_diff)
-
-        mytext = modal1 + '-' + modal2 + '_' + metric
-
-        stcs[mytext] = stc_contr
-
-        fname_stc = C.fname_STC(C, 'SensitivityMaps', subject, 'SensMap_' + mytext)
-
-        print('Saving STC to: %s.' % fname_stc)
-
-        stc_contr.save(fname_stc)
-
-
-    ### Visualisation:
-
-    # clim = {'kind': 'value', 'pos_lims': (0, 0.5, 1)}
-
-    # stc_norm['EEGMEG-MEG'].plot(subject=subject, subjects_dir=C.subjects_dir, hemi='both',
-    #                         time_viewer=True, transparent=False, colormap='mne', clim=clim)
-
+    print('Saving singular values to: %s' % fname_txt)
+    np.savetxt(fname_txt, np.array(sing_vals[modal]))
 
 # Done

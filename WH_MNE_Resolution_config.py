@@ -172,7 +172,7 @@ inv_lambda_empirical = {'eeg': 0.1, 'mag': 0.1, 'grad': 0.1}
 
 
 ##########################################################
-### APPLY INVERSE OPERATOR TO EVOKED DATA
+### INVERSE OPERATOR
 ##########################################################
 
 stc_path = '/group/erp/data/olaf.hauk/MEG/WakemanHensonEMEG/data/STC/'
@@ -183,6 +183,12 @@ stc_snr = 3.
 
 # inv_modalities = ['EEGMEG', 'MEG', 'EEG'] # which invop files to apply
 inv_modalities = ['EEGMEG', 'MEG']
+
+# orientation constraint
+inv_loose = [None, 0.2, 0.6]
+
+# depth weighting
+inv_depth = [None, 0.4, 0.8]
 
 # brain to morph individual STCs to
 stc_morph = 'fsaverage'
@@ -319,7 +325,7 @@ def fname_ForwardSolution(C, subject, modality):
      return fwd_fname
 
 
-def fname_InverseOperator(C, subject, st_duration, origin, latwin, modality):
+def fname_InverseOperator(C, subject, st_duration, origin, latwin, modality, loose, depth):
      # modality: e.g. EEG, MEG or EEGMEG
 
      subject = str(subject)
@@ -333,9 +339,17 @@ def fname_InverseOperator(C, subject, st_duration, origin, latwin, modality):
 
      cov_str = _cov_str(latwin)
 
-     inv_fname = op.join(C.evo_path, subject, subject + '_' + st_string + '_' + ori_string + C.MF_method + 
-                                                '_' + filt_str + '_' + cov_str +
-                                                '_' + C.inv_method + '_' + modality + '-inv.fif')
+     if loose == None: loose = 0
+
+     loo_str = '_loo%s' % str(int(100*loose))
+
+     if depth == None: depth = 0
+
+     dep_str = '_dep%s' % str(int(100*depth))
+
+     inv_fname = op.join(C.evo_path, subject, subject + '_' + st_string + '_' + ori_string + 
+                         C.MF_method + '_' + filt_str + '_' + cov_str + '_' + C.inv_method +
+                         '_' + modality + loo_str +  dep_str + '-inv.fif')
 
      return inv_fname
 

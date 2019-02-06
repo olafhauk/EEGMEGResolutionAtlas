@@ -82,14 +82,80 @@ for sbj in sbj_ids:
 
     for modality in ['EEGMEG', 'MEG', 'EEG', 'EEGMEG-MEG', 'EEGMEG-EEG']: # EEG/MEG/EEGMEG
 
-        for inv_type in C.res_inv_types: # 'MNE', 'LCMV' etc.
+        # contrasts for inverse methods only computed for EEGMEG
+        if modality == 'EEGMEG':
+
+            res_inv_types = C.res_inv_types + ['MNE-dSPM', 'MNE-sLORETA', 'dSPM-sLORETA', 'MNE-LCMV', 'dSPM-LCMV', 'sLORETA-LCMV']
+
+        else:
+
+            res_inv_types = C.res_inv_types
+
+        for inv_type in res_inv_types: # 'MNE', 'LCMV' etc.
 
             # for CTFs and PSFs
             for functype in ['CTF', 'PSF']:
 
-                print('\n###\nDoing %ss for %s and %s.\n###\n' % (functype, inv_type, modality))                
+                # iterate over inverse operator types
+                for loose in C.inv_loose: # orientation constraint
 
-                mytext = functype + '_' + inv_type + '_' + stc_type + '_' + modality
+                    for depth in C.inv_depth: # depth weighting
+
+                        print('\n###\nDoing %ss for %s and %s.\n###\n' % (functype, inv_type, modality))
+
+                        if loose == None: loose = 0
+
+                        loo_str = '_loo%s' % str(int(100*loose))
+
+                        if depth == None: depth = 0
+
+                        dep_str = '_dep%s' % str(int(100*depth))
+
+                        mytext = functype + '_' + inv_type + '_' + stc_type + '_' + modality + loo_str + dep_str
+
+                        if metric != '':
+
+                            mytext = mytext + '_' + metric
+
+                        fname_stc = C.fname_STC(C, stc_path, subject, mytext)
+
+                        fname_morph = C.fname_STC(C, stc_path, subject, mytext + '_mph')
+
+                        # read existing source estimate
+                        print('Reading: %s.' % fname_stc)
+                        stc = mne.read_source_estimate(fname_stc, subject)
+
+                        # compute morph_mat only once per subject
+                        if morph_mat == []:
+
+                            vertices_to = mne.grade_to_vertices(subject=C.stc_morph, grade=5, subjects_dir=C.subjects_dir)
+
+                            morph_mat = mne.compute_morph_matrix(subject_from=subject, subject_to=C.stc_morph,
+                                                                vertices_from=stc.vertices, vertices_to=vertices_to,
+                                                                subjects_dir=C.subjects_dir)
+
+                        # Morphing to standard brain
+                        morphed = mne.morph_data_precomputed(subject_from=subject, subject_to=C.stc_morph, stc_from=stc,
+                                                              vertices_to=vertices_to, morph_mat=morph_mat)
+
+                        print('Writing morphed to: %s.' % fname_morph)
+                        morphed.save(fname_morph)
+
+    # Depth weighting is separate
+
+    for modality in ['EEGMEG']: # EEG/MEG/EEGMEG
+
+        res_inv_types = ['MNE-MNE40', 'MNE-MNE80']
+
+        for inv_type in res_inv_types: # 'MNE', 'LCMV' etc.
+
+            # for CTFs and PSFs
+            for functype in ['CTF', 'PSF']:
+
+                loose = 0
+                loo_str = '_loo%s' % str(int(100*loose))
+
+                mytext = functype + '_' + inv_type + '_' + stc_type + '_' + modality + loo_str
 
                 if metric != '':
 
