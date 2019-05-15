@@ -18,7 +18,7 @@ import os.path as op
 import sys
 sys.path = [
  '/home/olaf/MEG/WakemanHensonEMEG/ScriptsResolution', # following list created by trial and error
- '/imaging/local/software/mne_python/latest_v0.15',
+ '/imaging/local/software/mne_python/latest_v0.16',
  '/imaging/local/software/anaconda/2.4.1/2/bin',
  '/imaging/local/software/anaconda/2.4.1/2/lib/python2.7/',
  '/imaging/local/software/anaconda/2.4.1/2/envs/mayavi_env/lib/python2.7/site-packages',
@@ -34,6 +34,7 @@ import glob
 import numpy as np
 
 import mne
+print('MNE Version: %s\n\n' % mne.__version__) # just in case
 
 ## get analysis parameters from config file
 
@@ -76,13 +77,16 @@ fname_avg = C.fname_STC(C, stc_path, C.stc_morph, '')
 if not op.exists(fname_avg):
     os.mkdir(fname_avg)
 
-for modality in ['EEGMEG', 'MEG', 'EEG', 'EEGMEG-MEG', 'EEGMEG-EEG']: # EEG/MEG/EEGMEG
+for modality in C.modalities + [x+'-'+y for (x,y) in C.modal_contr]: #['EEGMEG', 'MEG', 'EEG', 'EEGMEG-MEG', 'EEGMEG-EEG']: # EEG/MEG/EEGMEG
 
     # contrasts for inverse methods only computed for EEGMEG
     if modality == 'EEGMEG':
 
-        res_inv_types = C.res_inv_types + ['MNE-dSPM', 'MNE-sLORETA', 'dSPM-sLORETA',
-                                            'MNE-LCMV', 'dSPM-LCMV', 'sLORETA-LCMV', 'MNE-MNE40', 'MNE-MNE80']
+        res_inv_types = C.res_inv_types + \
+                            [x+'-'+y for (x,y) in C.meth_contr] + \
+                            ['dep'+str(int(100*x))+'-'+str(int(100*y)) for (x,y) in C.meth_contr_dep]
+        # res_inv_types = C.res_inv_types + ['MNE-dSPM', 'MNE-sLORETA', 'dSPM-sLORETA',
+        #                                     'MNE-LCMV', 'dSPM-LCMV', 'sLORETA-LCMV', 'dep0-40', 'dep0-80']
 
     else:
 
@@ -90,67 +94,73 @@ for modality in ['EEGMEG', 'MEG', 'EEG', 'EEGMEG-MEG', 'EEGMEG-EEG']: # EEG/MEG/
 
     for inv_type in res_inv_types: # 'MNE', 'LCMV' etc.
 
-        # for CTFs and PSFs
-        for functype in ['CTF', 'PSF']:
+        for lambda2 in C.res_lambda2s: # regularisation parameters
 
-            # iterate over inverse operator types
-                for loose in C.inv_loose: # orientation constraint
+            lamb2_str = str(lambda2).replace('.', '')
+            if len(lamb2_str) > 3:
+                lamb2_str = lamb2_str[:3]
 
-                    for depth in C.inv_depth: # depth weighting
+            # for CTFs and PSFs
+            for functype in ['CTF', 'PSF']:
 
-                        stcs = [] # Will contain STCs per subject for averaging
+                # iterate over inverse operator types
+                    for loose in C.inv_loose: # orientation constraint
 
-                        if loose == None: loose = 0
+                        for depth in C.inv_depth: # depth weighting
 
-                        loo_str = '_loo%s' % str(int(100*loose))
+                            stcs = [] # Will contain STCs per subject for averaging
 
-                        if depth == None: depth = 0
+                            if loose == None: loose = 0
 
-                        dep_str = '_dep%s' % str(int(100*depth))
+                            loo_str = 'loo%s' % str(int(100*loose))
 
-                        if inv_type[:7] == 'MNE-MNE': # exception for depth-weighted MNE
+                            if depth == None: depth = 0
 
-                            mytext = functype + '_' + inv_type + '_' + stc_type + '_' + modality + loo_str
+                            dep_str = 'dep%s' % str(int(100*depth))
 
-                        else:
+                            if inv_type[:3] == 'dep': # exception for depth-weighted MNE
 
-                            mytext = functype + '_' + inv_type + '_' + stc_type + '_' + modality + loo_str + dep_str
+                                mytext = '%s_%s_%s_%s_%s_%s' % (functype, inv_type, lamb2_str, stc_type, modality, loo_str)
 
-                        if metric != '':
+                            else:
 
-                            mytext = mytext + '_' + metric
+                                mytext = '%s_%s_%s_%s_%s_%s_%s' % (functype, inv_type, lamb2_str, stc_type, modality, loo_str, dep_str)
 
-                        for sbj in C.subjs:
+                            if metric != '':
 
-                            subject = 'Sub%02d' % sbj                
+                                mytext = mytext + '_' + metric
 
-                            fname_morph = C.fname_STC(C, stc_path, subject, mytext + '_mph')
+                            for sbj in C.subjs:
 
-                            # read existing source estimate
-                            print('Reading: %s.' % fname_morph)
-                            stc = mne.read_source_estimate(fname_morph, subject)
+                                subject = 'Sub%02d' % sbj                
 
-                            stcs.append(stc)
+                                fname_morph = C.fname_STC(C, stc_path, subject, mytext + '_mph')
 
-                        # average STCs across subjects
-                        print('Averaging %d STC files.' % len(stcs))
+                                # READ EXISTING SOURCE ESTIMATE
+                                print('Reading: %s.' % fname_morph)
+                                stc = mne.read_source_estimate(fname_morph, subject)
 
-                        avg = np.average([s.data for s in stcs], axis=0)
+                                stcs.append(stc)
 
-                        # turn average into source estimate object
-                        avg_stc = mne.SourceEstimate(avg, stcs[0].vertices, stcs[0].tmin, stcs[0].tstep)
+                            # average STCs across subjects
+                            print('Averaging %d STC files.' % len(stcs))
 
-                        fname_avg = C.fname_STC(C, stc_path, C.stc_morph, mytext)
+                            avg = np.average([s.data for s in stcs], axis=0)
 
-                        print('###\nWriting grand-average STC file %s.\n###' % fname_avg)
+                            # turn average into source estimate object
+                            avg_stc = mne.SourceEstimate(avg, stcs[0].vertices, stcs[0].tmin, stcs[0].tstep)
 
-                        avg_stc.save(fname_avg)
+                            fname_avg = C.fname_STC(C, stc_path, C.stc_morph, mytext)
 
-                        if inv_type[:7] == 'MNE-MNE': # depth-weighted MNE only for one depth
+                            print('###\nWriting grand-average STC file %s.\n###' % fname_avg)
+
+                            avg_stc.save(fname_avg)
+
+                            if inv_type[:3] == 'dep': # depth-weighted MNE only for one depth
+
+                                break
+
+                        if inv_type[:3] == 'dep': # depth-weighted MNE only for one loose
 
                             break
-
-                    if inv_type[:7] == 'MNE-MNE': # depth-weighted MNE only for one loose
-
-                        break
 # Done

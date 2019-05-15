@@ -15,7 +15,7 @@ import os.path as op
 import sys
 sys.path = [
  '/home/olaf/MEG/WakemanHensonEMEG/ScriptsResolution', # following list created by trial and error
- '/imaging/local/software/mne_python/latest_v0.15',
+ '/imaging/local/software/mne_python/latest_v0.16',
  '/imaging/local/software/anaconda/2.4.1/2/bin',
  '/imaging/local/software/anaconda/2.4.1/2/lib/python2.7/',
  '/imaging/local/software/anaconda/2.4.1/2/envs/mayavi_env/lib/python2.7/site-packages',
@@ -31,6 +31,7 @@ import glob
 import numpy as np
 
 import mne
+print('MNE Version: %s\n\n' % mne.__version__) # just in case
 
 ## get analysis parameters from config file
 
@@ -86,7 +87,7 @@ for sbj in sbj_ids:
     fwd = mne.convert_forward_solution(fwd, surf_ori=True, force_fixed=True)
 
     # covariance matrix (filter with wildcard)
-    fname_cov = C.fname_cov(C, subject, st_duration, origin, C.res_cov_latwin, C.inv_method, '*')
+    fname_cov = C.fname_cov(C, subject, st_duration, origin, C.res_cov_latwin, C.inv_cov_method, '*')
 
     # method may be underspecified, since it may be ranked differently for different subjects
     fname_cov = glob.glob(fname_cov)[0] # be careful if multiple options present
@@ -112,7 +113,7 @@ for sbj in sbj_ids:
         info['projs'] = noise_cov_use['projs']
         info['comps'] = '' # dummy to avoid crash
 
-        if C.inv_method == 'empirical': # if unregularised
+        if C.inv_cov_method == 'empirical': # if unregularised
 
             noise_cov_use = mne.cov.regularize(noise_cov_use, info, mag=C.res_lambda_empirical['mag'],
                                                     grad=C.res_lambda_empirical['grad'], eeg=C.res_lambda_empirical['eeg'])

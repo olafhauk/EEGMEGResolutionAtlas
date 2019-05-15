@@ -15,7 +15,7 @@ import os.path as op
 import sys
 sys.path = [
  '/home/olaf/MEG/WakemanHensonEMEG/ScriptsResolution', # following list created by trial and error
- '/imaging/local/software/mne_python/latest_v0.15',
+ '/imaging/local/software/mne_python/latest_v0.16',
  '/imaging/local/software/anaconda/2.4.1/2/bin',
  '/imaging/local/software/anaconda/2.4.1/2/lib/python2.7/',
  '/imaging/local/software/anaconda/2.4.1/2/envs/mayavi_env/lib/python2.7/site-packages',
@@ -31,6 +31,7 @@ import glob
 import numpy as np
 
 import mne
+print('MNE Version: %s\n\n' % mne.__version__) # just in case
 
 ## get analysis parameters from config file
 

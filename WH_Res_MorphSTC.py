@@ -16,7 +16,7 @@ import os.path as op
 import sys
 sys.path = [
  '/home/olaf/MEG/WakemanHensonEMEG/ScriptsResolution', # following list created by trial and error
- '/imaging/local/software/mne_python/latest_v0.15',
+ '/imaging/local/software/mne_python/latest_v0.16',
  '/imaging/local/software/anaconda/2.4.1/2/bin',
  '/imaging/local/software/anaconda/2.4.1/2/lib/python2.7/',
  '/imaging/local/software/anaconda/2.4.1/2/envs/mayavi_env/lib/python2.7/site-packages',
@@ -32,8 +32,9 @@ import glob
 import numpy as np
 
 import mne
+print('MNE Version: %s\n\n' % mne.__version__) # just in case
 
-## get analysis parameters from config file
+# ## get analysis parameters from config file
 
 module_name = sys.argv[1]
 
@@ -80,12 +81,13 @@ for sbj in sbj_ids:
 
     print('###\nAbout to morph STCs for %s.\n###' % (subject))
 
-    for modality in ['EEGMEG', 'MEG', 'EEG', 'EEGMEG-MEG', 'EEGMEG-EEG']: # EEG/MEG/EEGMEG
+    for modality in C.modalities + [x+'-'+y for (x,y) in C.modal_contr]: # EEG/MEG/EEGMEG and subtractions
 
-        # contrasts for inverse methods only computed for EEGMEG
+        # subtraction contrasts for inverse methods only computed for EEGMEG
         if modality == 'EEGMEG':
 
-            res_inv_types = C.res_inv_types + ['MNE-dSPM', 'MNE-sLORETA', 'dSPM-sLORETA', 'MNE-LCMV', 'dSPM-LCMV', 'sLORETA-LCMV']
+            res_inv_types = C.res_inv_types + [x+'-'+y for (x,y) in C.meth_contr]
+            # + ['MNE-dSPM', 'MNE-sLORETA', 'dSPM-sLORETA', 'MNE-LCMV', 'dSPM-LCMV', 'sLORETA-LCMV']
 
         else:
 
@@ -93,96 +95,109 @@ for sbj in sbj_ids:
 
         for inv_type in res_inv_types: # 'MNE', 'LCMV' etc.
 
-            # for CTFs and PSFs
-            for functype in ['CTF', 'PSF']:
+            for lambda2 in C.res_lambda2s: # regularisation parameters
 
-                # iterate over inverse operator types
-                for loose in C.inv_loose: # orientation constraint
+                lamb2_str = str(lambda2).replace('.', '')
+                if len(lamb2_str) > 3:
+                    lamb2_str = lamb2_str[:3]
 
-                    for depth in C.inv_depth: # depth weighting
+                # for CTFs and PSFs
+                for functype in ['CTF', 'PSF']:
 
-                        print('\n###\nDoing %ss for %s and %s.\n###\n' % (functype, inv_type, modality))
+                    # iterate over inverse operator types
+                    for loose in C.inv_loose: # orientation constraint
 
-                        if loose == None: loose = 0
+                        for depth in C.inv_depth: # depth weighting
 
-                        loo_str = '_loo%s' % str(int(100*loose))
+                            print('\n###\nDoing %ss for %s and %s.\n###\n' % (functype, inv_type, modality))
 
-                        if depth == None: depth = 0
+                            if loose == None: loose = 0
 
-                        dep_str = '_dep%s' % str(int(100*depth))
+                            loo_str = 'loo%s' % str(int(100*loose))
 
-                        mytext = functype + '_' + inv_type + '_' + stc_type + '_' + modality + loo_str + dep_str
+                            if depth == None: depth = 0
 
-                        if metric != '':
+                            dep_str = 'dep%s' % str(int(100*depth))
 
-                            mytext = mytext + '_' + metric
+                            mytext = '%s_%s_%s_%s_%s_%s_%s' % (functype, inv_type, lamb2_str, stc_type, modality, loo_str, dep_str)
 
-                        fname_stc = C.fname_STC(C, stc_path, subject, mytext)
+                            if metric != '':
 
-                        fname_morph = C.fname_STC(C, stc_path, subject, mytext + '_mph')
+                                mytext = mytext + '_' + metric
 
-                        # read existing source estimate
-                        print('Reading: %s.' % fname_stc)
-                        stc = mne.read_source_estimate(fname_stc, subject)
+                            fname_stc = C.fname_STC(C, stc_path, subject, mytext)
 
-                        # compute morph_mat only once per subject
-                        if morph_mat == []:
+                            fname_morph = C.fname_STC(C, stc_path, subject, mytext + '_mph')
 
-                            vertices_to = mne.grade_to_vertices(subject=C.stc_morph, grade=5, subjects_dir=C.subjects_dir)
+                            # read existing source estimate
+                            print('Reading: %s.' % fname_stc)
+                            stc = mne.read_source_estimate(fname_stc, subject)
 
-                            morph_mat = mne.compute_morph_matrix(subject_from=subject, subject_to=C.stc_morph,
-                                                                vertices_from=stc.vertices, vertices_to=vertices_to,
-                                                                subjects_dir=C.subjects_dir)
+                            # compute morph_mat only once per subject
+                            if morph_mat == []:
 
-                        # Morphing to standard brain
-                        morphed = mne.morph_data_precomputed(subject_from=subject, subject_to=C.stc_morph, stc_from=stc,
-                                                              vertices_to=vertices_to, morph_mat=morph_mat)
+                                vertices_to = mne.grade_to_vertices(subject=C.stc_morph, grade=5, subjects_dir=C.subjects_dir)
 
-                        print('Writing morphed to: %s.' % fname_morph)
-                        morphed.save(fname_morph)
+                                morph_mat = mne.compute_morph_matrix(subject_from=subject, subject_to=C.stc_morph,
+                                                                    vertices_from=stc.vertices, vertices_to=vertices_to,
+                                                                    subjects_dir=C.subjects_dir)
+
+                            # Morphing to standard brain
+                            morphed = mne.morph_data_precomputed(subject_from=subject, subject_to=C.stc_morph, stc_from=stc,
+                                                                  vertices_to=vertices_to, morph_mat=morph_mat)
+
+                            print('Writing morphed to: %s.' % fname_morph)
+                            morphed.save(fname_morph)
 
     # Depth weighting is separate
 
     for modality in ['EEGMEG']: # EEG/MEG/EEGMEG
 
-        res_inv_types = ['MNE-MNE40', 'MNE-MNE80']
+        # create strings for filenames corresponding to contrasts
+        res_inv_types = ['dep'+str(int(100*x))+'-'+str(int(100*y)) for (x,y) in C.meth_contr_dep]
 
         for inv_type in res_inv_types: # 'MNE', 'LCMV' etc.
 
-            # for CTFs and PSFs
-            for functype in ['CTF', 'PSF']:
+            for lambda2 in C.res_lambda2s: # regularisation parameters
 
-                loose = 0
-                loo_str = '_loo%s' % str(int(100*loose))
+                lamb2_str = str(lambda2).replace('.', '')
+                if len(lamb2_str) > 3:
+                    lamb2_str = lamb2_str[:3]
 
-                mytext = functype + '_' + inv_type + '_' + stc_type + '_' + modality + loo_str
+                # for CTFs and PSFs
+                for functype in ['CTF', 'PSF']:
 
-                if metric != '':
+                    loose = 0
+                    loo_str = 'loo%s' % str(int(100*loose))
 
-                    mytext = mytext + '_' + metric
+                    mytext = '%s_%s_%s_%s_%s_%s' % (functype, inv_type, lamb2_str, stc_type, modality, loo_str)
 
-                fname_stc = C.fname_STC(C, stc_path, subject, mytext)
+                    if metric != '':
 
-                fname_morph = C.fname_STC(C, stc_path, subject, mytext + '_mph')
+                        mytext = mytext + '_' + metric
 
-                # read existing source estimate
-                print('Reading: %s.' % fname_stc)
-                stc = mne.read_source_estimate(fname_stc, subject)
+                    fname_stc = C.fname_STC(C, stc_path, subject, mytext)
 
-                # compute morph_mat only once per subject
-                if morph_mat == []:
+                    fname_morph = C.fname_STC(C, stc_path, subject, mytext + '_mph')
 
-                    vertices_to = mne.grade_to_vertices(subject=C.stc_morph, grade=5, subjects_dir=C.subjects_dir)
+                    # read existing source estimate
+                    print('Reading: %s.' % fname_stc)
+                    stc = mne.read_source_estimate(fname_stc, subject)
 
-                    morph_mat = mne.compute_morph_matrix(subject_from=subject, subject_to=C.stc_morph,
-                                                        vertices_from=stc.vertices, vertices_to=vertices_to,
-                                                        subjects_dir=C.subjects_dir)
+                    # compute morph_mat only once per subject
+                    if morph_mat == []:
 
-                # Morphing to standard brain
-                morphed = mne.morph_data_precomputed(subject_from=subject, subject_to=C.stc_morph, stc_from=stc,
-                                                      vertices_to=vertices_to, morph_mat=morph_mat)
+                        vertices_to = mne.grade_to_vertices(subject=C.stc_morph, grade=5, subjects_dir=C.subjects_dir)
 
-                print('Writing morphed to: %s.' % fname_morph)
-                morphed.save(fname_morph)
+                        morph_mat = mne.compute_morph_matrix(subject_from=subject, subject_to=C.stc_morph,
+                                                            vertices_from=stc.vertices, vertices_to=vertices_to,
+                                                            subjects_dir=C.subjects_dir)
+
+                    # Morphing to standard brain
+                    morphed = mne.morph_data_precomputed(subject_from=subject, subject_to=C.stc_morph, stc_from=stc,
+                                                          vertices_to=vertices_to, morph_mat=morph_mat)
+
+                    print('Writing morphed to: %s.' % fname_morph)
+                    morphed.save(fname_morph)
 
 # Done

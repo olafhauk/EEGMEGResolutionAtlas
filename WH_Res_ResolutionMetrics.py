@@ -15,7 +15,7 @@ import os.path as op
 import sys
 sys.path = [
  '/home/olaf/MEG/WakemanHensonEMEG/ScriptsResolution', # following list created by trial and error
- '/imaging/local/software/mne_python/latest_v0.15',
+ '/imaging/local/software/mne_python/latest_v0.16',
  '/imaging/local/software/anaconda/2.4.1/2/bin',
  '/imaging/local/software/anaconda/2.4.1/2/lib/python2.7/',
  '/imaging/local/software/anaconda/2.4.1/2/envs/mayavi_env/lib/python2.7/site-packages',
@@ -31,6 +31,7 @@ import glob
 import numpy as np
 
 import mne
+print('MNE Version: %s\n\n' % mne.__version__) # just in case
 
 ## get analysis parameters from config file
 
@@ -92,9 +93,8 @@ for sbj in sbj_ids:
     locations_1 = fwd['src'][1]['rr'][vertno_1,:]
     locations = np.vstack([locations_0, locations_1])
 
-
     # covariance matrix (filter with wildcard)
-    fname_cov = C.fname_cov(C, subject, st_duration, origin, C.res_cov_latwin, C.inv_method, '*')
+    fname_cov = C.fname_cov(C, subject, st_duration, origin, C.res_cov_latwin, C.inv_cov_method, '*')
 
     # method may be underspecified, since it may be ranked differently for different subjects
     fname_cov = glob.glob(fname_cov)[0] # be careful if multiple options present
@@ -103,40 +103,57 @@ for sbj in sbj_ids:
 
     noise_cov = mne.read_cov(fname_cov)
 
-    # initialise stcs dict to collect results
+    # INITIALISE stcs dict to collect results
     # the more the merrier...
     stcs = {'PSF': {}, 'CTF': {}}
 
     for functype in stcs.keys(): # PSF/CTF
 
-        # contrasts for different inverse methods
-        inv_contr = ['MNE-dSPM', 'MNE-sLORETA', 'dSPM-sLORETA', 'MNE-LCMV', 'dSPM-LCMV', 'sLORETA-LCMV',
-                        'MNE-MNE40', 'MNE-MNE80']
-        for inv_type in C.res_inv_types + inv_contr: # inverse methods
+        # contrasts for different inverse methods and subtractions (also depth weighted)
+        for inv_type in C.res_inv_types + [x+'-'+y for (x,y) in C.meth_contr] + ['dep'+str(int(100*x))+'-'+str(int(100*y)) for (x,y) in C.meth_contr_dep]: # inverse methods
 
             stcs[functype][inv_type] = {}
 
-            for modal in ['EEGMEG', 'MEG', 'EEG', 'EEGMEG-MEG', 'EEGMEG-EEG', 'MEG-EEG']:
+            for lambda2 in C.res_lambda2s: # regularisation parameters
 
-                stcs[functype][inv_type][modal] = {}
+                lamb2_str = str(lambda2).replace('.', '')
+                if len(lamb2_str) > 3:
+                    lamb2_str = lamb2_str[:3]
 
-                for loose in C.inv_loose: # orientation constraint
+                stcs[functype][inv_type][lamb2_str] = {}
 
-                    if loose == None: loose = 0
-                    loo_str = 'loo%s' % str(int(100*loose))
+                for modal in C.modalities + [x+'-'+y for (x,y) in C.modal_contr]: # ['EEGMEG', 'MEG', 'EEG', 'EEGMEG-MEG', 'EEGMEG-EEG', 'MEG-EEG']:
 
-                    stcs[functype][inv_type][modal][loo_str] = {}
+                    stcs[functype][inv_type][lamb2_str][modal] = {}
 
-                    for depth in C.inv_depth: # depth weighting
+                    for loose in C.inv_loose: # orientation constraint
 
-                        if depth == None: depth = 0
-                        dep_str = 'dep%s' % str(int(100*depth))
+                        if loose == None: loose = 0
+                        loo_str = 'loo%s' % str(int(100*loose))
 
-                        stcs[functype][inv_type][modal][loo_str][dep_str] = {}
+                        stcs[functype][inv_type][lamb2_str][modal][loo_str] = {}
+
+                        for depth in C.inv_depth: # depth weighting
+
+                            if depth == None: depth = 0
+                            dep_str = 'dep%s' % str(int(100*depth))
+
+                            stcs[functype][inv_type][lamb2_str][modal][loo_str][dep_str] = {}
 
 
     # iterate over different combinations of sensors
-    for (eeg,meg,modal) in [(True,True,'EEGMEG'), (False,True,'MEG'), (True,False,'EEG')]:
+    modal_iter = []
+    for modal in C.modalities:
+        if modal == 'EEGMEG':
+            modal_iter.append([True, True, 'EEGMEG'])
+        elif modal == 'MEG':
+            modal_iter.append([False, True, 'MEG'])
+        elif modal == 'EEG':
+            modal_iter.append([True, False, 'EEG'])
+        else:
+            print('Modality not defined: %s.' % modal)
+
+    for (eeg,meg,modal) in modal_iter:
 
         fwd_use = mne.pick_types_forward(fwd, meg=meg, eeg=eeg)
 
@@ -151,7 +168,7 @@ for sbj in sbj_ids:
         info['comps'] = ''
 
         # regularise noise covariance
-        if C.inv_method == 'empirical': # if unregularised
+        if C.inv_cov_method == 'empirical': # if unregularised
 
             noise_cov_use = mne.cov.regularize(noise_cov_use, info, mag=C.res_lambda_empirical['mag'],
                                                     grad=C.res_lambda_empirical['grad'], eeg=C.res_lambda_empirical['eeg'])
@@ -182,92 +199,97 @@ for sbj in sbj_ids:
 
                 invop = mne.minimum_norm.read_inverse_operator(inv_fname)
 
+                for inv_type in C.res_inv_types: # 'MNE', 'LCMV' etc.
 
-                for inv_type in C.res_inv_types: # 'MNE', 'LCMV' etc.                    
+                    for lambda2 in C.res_lambda2s: # regularisation parameters
 
-                    print('\n###\nComputing resolution matrix for %s.\n###\n' % (inv_type))
+                        lamb2_str = str(lambda2).replace('.', '')
+                        if len(lamb2_str) > 3:
+                            lamb2_str = lamb2_str[:3]
 
-                    if inv_type in ['MNE', 'sLORETA', 'dSPM']: # minimum-norm-based methods
+                        print('\n###\nComputing resolution matrix for %s.\n###\n' % (inv_type))
 
-                        resmat = R.make_resolution_matrix(fwd_use, invop, method=inv_type, lambda2=1./3.**2)
+                        if inv_type in ['MNE', 'sLORETA', 'dSPM']: # minimum-norm-based methods
 
-                    elif inv_type == 'LCMV': # LCMV beamformer
+                            resmat = R.make_resolution_matrix(fwd_use, invop, method=inv_type, lambda2=lambda2)
 
-                        # NOTE: here noise and data cov identical
-                        resmat = R.make_resolution_matrix_lcmv(fwd_use, info, noise_cov_use, noise_cov_use)
+                        elif inv_type == 'LCMV': # LCMV beamformer
 
-                    
-                    # turn resolution matrix to STC and save
-                    for (mat, matname) in [(resmat, 'PSF'), (resmat.T, 'CTF')]:
+                            # NOTE: here noise and data cov identical
+                            resmat = R.make_resolution_matrix_lcmv(fwd_use, info, noise_cov_use, noise_cov_use)
 
-                        stc = R.mat_to_stc(mat, fwd['src'])
+                        
+                        # turn resolution matrix to STC and save
+                        for (mat, matname) in [(resmat, 'PSF'), (resmat.T, 'CTF')]:
 
-                        mytext = matname + 'plot_' + inv_type + '_' + modal
+                            stc = R.mat_to_stc(mat, fwd['src'])
 
-                        fname_stc = C.fname_STC(C, 'ResolutionMetrics', subject, mytext)
+                            mytext = '%s_plot_%s_%s_%s' % (matname, inv_type, lamb2_str, modal)
 
-                        print('###\nWriting %s as STC file to: %s.\n###' % (matname, fname_stc))
+                            fname_stc = C.fname_STC(C, 'ResolutionMetrics', subject, mytext)
 
-                        stc.save(fname_stc)
+                            print('###\nWriting %s as STC file to: %s.\n###' % (matname, fname_stc))
+
+                            stc.save(fname_stc)
 
 
-                    # compute CTFs and PSFs
-                    for (axis, functype) in [(0, 'PSF'), (1,'CTF')]:
-               
-                        # NOTE: edit metric, metric_text and metric_mat at the same time
-                        if metric_type == 'locerr':
+                        # compute CTFs and PSFs
+                        for (axis, functype) in [(0, 'PSF'), (1,'CTF')]:
+                   
+                            # NOTE: edit metric, metric_text and metric_mat at the same time
+                            if metric_type == 'locerr':
 
-                            print('###\nComputing localisation error metric for %s.\n###' % functype)
+                                print('###\nComputing localisation error metric for %s.\n###' % functype)
 
-                            # compute requested resolution metric
-                            metric_mat = R.localisation_error(resmat, locations, axis=axis, metric=metric)
+                                # compute requested resolution metric
+                                metric_mat = R.localisation_error(resmat, locations, axis=axis, metric=metric)
 
-                            # convert to cm for visualisation (NOTE: may depend on metric)
-                            metric_mat = 100.*metric_mat
+                                # convert to cm for visualisation (NOTE: may depend on metric)
+                                metric_mat = 100.*metric_mat
 
-                        elif metric_type == 'width':
+                            elif metric_type == 'width':
 
-                            print('###\nComputing spatial width metric for %s.\n###' % functype)
+                                print('###\nComputing spatial width metric for %s.\n###' % functype)
 
-                            metric_mat = R.spatial_width(resmat, locations, axis=axis, metric=metric)
+                                metric_mat = R.spatial_width(resmat, locations, axis=axis, metric=metric)
 
-                            # convert to cm
-                            metric_mat = 100.*metric_mat
+                                # convert to cm
+                                metric_mat = 100.*metric_mat
 
-                        elif metric_type == 'amplitude':
+                            elif metric_type == 'amplitude':
 
-                            print('###\nComputing amplitude metric for %s.\n###' % functype)
+                                print('###\nComputing amplitude metric for %s.\n###' % functype)
 
-                            metric_mat = R.relative_amplitude(resmat, locations, axis, metric=metric)
+                                metric_mat = R.relative_amplitude(resmat, locations, axis, metric=metric)
 
-                        # fake multiple time steps
-                        # cm for visualisation
-                        metric_mat_rep = np.repeat(metric_mat[:,np.newaxis], 5, axis=1)
+                            # fake multiple time steps
+                            # cm for visualisation
+                            metric_mat_rep = np.repeat(metric_mat[:,np.newaxis], 5, axis=1)
 
-                        # convert norms to source estimate
-                        stc_metric = mne.SourceEstimate(metric_mat_rep, vertno, tmin=0., tstep=1.)
+                            # convert norms to source estimate
+                            stc_metric = mne.SourceEstimate(metric_mat_rep, vertno, tmin=0., tstep=1.)
 
-                        # for filename
-                        metric_text = '_' + metric_type + '_' + metric + '_'
+                            # for filename
+                            metric_text = metric_type + '_' + metric
 
-                        if loose == None: loose = 0
+                            if loose == None: loose = 0
 
-                        loo_str = '_loo%s' % str(int(100*loose))
+                            loo_str = 'loo%s' % str(int(100*loose))
 
-                        if depth == None: depth = 0
+                            if depth == None: depth = 0
 
-                        dep_str = '_dep%s' % str(int(100*depth))
+                            dep_str = 'dep%s' % str(int(100*depth))
 
-                        mytext = functype + '_' + inv_type + metric_text + modal + loo_str + dep_str
+                            mytext = '%s_%s_%s_%s_%s_%s_%s' % (functype, inv_type, lamb2_str, metric_text, modal, loo_str, dep_str)
 
-                        fname_stc = C.fname_STC(C, 'ResolutionMetrics', subject, mytext)
+                            fname_stc = C.fname_STC(C, 'ResolutionMetrics', subject, mytext)
 
-                        print('###\nWriting STC file to: %s.\n###' % (fname_stc))
+                            print('###\nWriting STC file to: %s.\n###' % (fname_stc))
 
-                        stc_metric.save(fname_stc)
+                            stc_metric.save(fname_stc)
 
-                        # collect results in dict
-                        stcs[functype][inv_type][modal][loo_str[1:]][dep_str[1:]] = stc_metric
+                            # collect results in dict
+                            stcs[functype][inv_type][lamb2_str][modal][loo_str][dep_str] = stc_metric
 
     
     print('\n###\nContrasting modalities.\n###')
@@ -276,37 +298,43 @@ for sbj in sbj_ids:
 
         for inv_type in C.res_inv_types: # 'MNE', 'dSPM', 'lcmv' etc.
 
-            for (modal1,modal2) in [('EEGMEG', 'MEG'), ('EEGMEG', 'EEG'), ('MEG','EEG')]:
+            for lambda2 in C.res_lambda2s: # regularisation parameters
 
-                # iterate over inverse operator types
-                for loose in C.inv_loose: # orientation constraint
+                lamb2_str = str(lambda2).replace('.', '')
+                if len(lamb2_str) > 3:
+                    lamb2_str = lamb2_str[:3]
 
-                    for depth in C.inv_depth: # depth weighting
+                for (modal1,modal2) in C.modal_contr: # [('EEGMEG', 'MEG'), ('EEGMEG', 'EEG'), ('MEG','EEG')]:
 
-                        if loose == None: loose = 0
+                    # iterate over inverse operator types
+                    for loose in C.inv_loose: # orientation constraint
 
-                        loo_str = '_loo%s' % str(int(100*loose))
+                        for depth in C.inv_depth: # depth weighting
 
-                        if depth == None: depth = 0
+                            if loose == None: loose = 0
 
-                        dep_str = '_dep%s' % str(int(100*depth))
-           
-                        stc_contr = stcs[functype][inv_type][modal1][loo_str[1:]][dep_str[1:]] - \
-                                        stcs[functype][inv_type][modal2][loo_str[1:]][dep_str[1:]]
+                            loo_str = 'loo%s' % str(int(100*loose))
 
-                        modal = modal1 + '-' + modal2
+                            if depth == None: depth = 0
 
-                        stcs[functype][inv_type][modal][loo_str[1:]][dep_str[1:]] = stc_contr
+                            dep_str = 'dep%s' % str(int(100*depth))
+               
+                            stc_contr = stcs[functype][inv_type][lamb2_str][modal1][loo_str][dep_str] - \
+                                            stcs[functype][inv_type][lamb2_str][modal2][loo_str][dep_str]
 
-                        mytext = functype + '_' + inv_type + metric_text + modal + loo_str + dep_str
+                            modal = modal1 + '-' + modal2
 
-                        fname_stc = C.fname_STC(C, 'ResolutionMetrics', subject, mytext)
+                            stcs[functype][inv_type][lamb2_str][modal][loo_str][dep_str] = stc_contr
 
-                        print('Saving STC to: %s.' % fname_stc)
+                            mytext = '%s_%s_%s_%s_%s_%s_%s' % (functype, inv_type, lamb2_str, metric_text, modal, loo_str, dep_str)
 
-                        stc_contr.save(fname_stc)
+                            fname_stc = C.fname_STC(C, 'ResolutionMetrics', subject, mytext)
 
-                print "Nothing."
+                            print('Saving STC to: %s.' % fname_stc)
+
+                            stc_contr.save(fname_stc)
+
+                    print "Nothing."
 
 
     print('\n###\nContrasting inverse methods.\n###')
@@ -316,67 +344,81 @@ for sbj in sbj_ids:
         # methods to subtract from each other, meth1-meth2
         for modal in ['EEGMEG']:
 
-            for (meth1,meth2) in [('MNE','dSPM'), ('MNE','sLORETA'), ('dSPM', 'sLORETA'),
-                                ('MNE', 'LCMV'), ('dSPM', 'LCMV'), ('sLORETA','LCMV')]:
+            for (meth1,meth2) in C.meth_contr: # [('MNE','dSPM'), ('MNE','sLORETA'), ('dSPM', 'sLORETA'), ('MNE', 'LCMV'), ('dSPM', 'LCMV'), ('sLORETA','LCMV')]:
 
-                # iterate over inverse operator types
-                for loose in C.inv_loose: # orientation constraint
+                for lambda2 in C.res_lambda2s: # regularisation parameters
 
-                    for depth in C.inv_depth: # depth weighting
+                    lamb2_str = str(lambda2).replace('.', '')
+                    if len(lamb2_str) > 3:
+                        lamb2_str = lamb2_str[:3]
 
-                        if loose == None: loose = 0
+                    # iterate over inverse operator types
+                    for loose in C.inv_loose: # orientation constraint
 
-                        loo_str = '_loo%s' % str(int(100*loose))
+                        for depth in C.inv_depth: # depth weighting
 
-                        if depth == None: depth = 0
+                            if loose == None: loose = 0
 
-                        dep_str = '_dep%s' % str(int(100*depth))
-           
-                        stc_contr = stcs[functype][meth1][modal][loo_str[1:]][dep_str[1:]] - \
-                                        stcs[functype][meth2][modal][loo_str[1:]][dep_str[1:]]
+                            loo_str = 'loo%s' % str(int(100*loose))
 
-                        meth = meth1 + '-' + meth2
+                            if depth == None: depth = 0
 
-                        stcs[functype][meth][modal][loo_str[1:]][dep_str[1:]] = stc_contr
+                            dep_str = 'dep%s' % str(int(100*depth))
+               
+                            stc_contr = stcs[functype][meth1][lamb2_str][modal][loo_str][dep_str] - \
+                                            stcs[functype][meth2][lamb2_str][modal][loo_str][dep_str]
 
-                        mytext = functype + '_' + meth + metric_text + modal + loo_str + dep_str
+                            meth = meth1 + '-' + meth2
+
+                            stcs[functype][meth][lamb2_str][modal][loo_str][dep_str] = stc_contr
+
+                            mytext = '%s_%s_%s_%s_%s_%s_%s' % (functype, meth, lamb2_str, metric_text, modal, loo_str, dep_str)
+
+                            fname_stc = C.fname_STC(C, 'ResolutionMetrics', subject, mytext)
+
+                            print('Saving STC to: %s.' % fname_stc)
+
+                            stc_contr.save(fname_stc)
+
+            
+            # Depth weighting is separate
+            # Do subtractions if specified for different depth weightings
+            if not C.meth_contr_dep == []:
+
+                loose = 0
+                loo_str = 'loo%s' % str(int(100*loose))
+
+                # For filenames
+                meth1 = 'MNE'
+                meth2 = 'MNE'
+
+                for (dep1,dep2) in C.meth_contr_dep: # what to subtract from each other
+                  
+                    dep_str1 = 'dep%s' % str(int(100*dep1))
+                    dep_str2 = 'dep%s' % str(int(100*dep2))
+
+                    for lambda2 in C.res_lambda2s: # regularisation parameters
+
+                        lamb2_str = str(lambda2).replace('.', '')
+                        if len(lamb2_str) > 3:
+                            lamb2_str = lamb2_str[:3]
+                                               
+                        # subtract depth-weighted from non-weighted MNE
+                        stc_contr = stcs[functype][meth1][lamb2_str][modal][loo_str][dep_str1] - \
+                                                    stcs[functype][meth2][lamb2_str][modal][loo_str][dep_str2]
+
+                        # for filename
+                        meth = 'dep%s-%s' % (dep_str1[3:], dep_str2[3:])
+
+                        stcs[functype][meth][lamb2_str][modal][loo_str][dep_str2] = stc_contr
+
+                        mytext = '%s_%s_%s_%s_%s_%s' % (functype, meth, lamb2_str, metric_text, modal, loo_str)
 
                         fname_stc = C.fname_STC(C, 'ResolutionMetrics', subject, mytext)
 
                         print('Saving STC to: %s.' % fname_stc)
 
                         stc_contr.save(fname_stc)
-
-            
-            # Depth weighting is separate
-
-            loose = 0
-            loo_str = '_loo%s' % str(int(100*loose))
-
-            # subtract other methods from this one
-            meth1 = 'MNE'
-            meth2 = 'MNE'
-            dep_str1 = '_dep%s' % str(int(100*0))
-
-            for depth in C.inv_depth[1:]: # depth weighting, no 0
-                
-                dep_str2 = '_dep%s' % str(int(100*depth))
-                
-                # subtract depth-weighted from non-weighted MNE
-                stc_contr = stcs[functype][meth1][modal][loo_str[1:]][dep_str1[1:]] - \
-                                            stcs[functype][meth2][modal][loo_str[1:]][dep_str2[1:]]
-
-                meth = 'MNE-MNE' + dep_str2[4:]
-
-                stcs[functype][meth][modal][loo_str[1:]][dep_str2[1:]] = stc_contr
-
-                mytext = functype + '_' + meth + metric_text + modal + loo_str
-
-                fname_stc = C.fname_STC(C, 'ResolutionMetrics', subject, mytext)
-
-                print('Saving STC to: %s.' % fname_stc)
-
-                stc_contr.save(fname_stc)
 
 
     ### Visualisation:
