@@ -5,6 +5,10 @@ Peak Localisation Error (PLE) and Spatial Deviation (SD)
 are computed for L2-MNE and sLORETA, respectively.
 sLORETA has zero PLE, therefore outperforming L2-MNE.
 However, L2-MNE outperforms sLORETA with respect to SD.
+The CTFs for L2-MNE and sLORETA have the same shape,
+thus localisation error and width metrics are the same.
+For L2-MNE, PSFs and CTFs are the same, hence the metrics
+are, too.
 =========================================================
 OH, May 2019
 """
@@ -64,10 +68,10 @@ locations_lh = forward['src'][0]['rr'][vertno_lh,:]
 locations_rh = forward['src'][1]['rr'][vertno_rh,:]
 locations = np.vstack([locations_lh, locations_rh])
 
-# initialise lists for resolution metrics
-locerr, width = [], []
-
 for (func,axis) in zip(['PSF','CTF'], [0,1]):
+
+    # initialise lists for resolution metrics
+    locerr, width = [], []
 
     for method in ['MNE', 'sLORETA']:
 
