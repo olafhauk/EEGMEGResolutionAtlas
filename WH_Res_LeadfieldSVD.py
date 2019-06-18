@@ -1,7 +1,7 @@
 """
 =========================================================
 Compute singular values for whitened leadfields, for all subjects.
-E.g.: run WH_Res_LeadfieldSVD.py WH_MNE_Resolution_config
+E.g.: run WH_Res_LeadfieldSVD.py WH_Res_config
 =========================================================
 
 """

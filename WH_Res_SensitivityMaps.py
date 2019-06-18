@@ -1,7 +1,7 @@
 """
 =========================================================
 Compute whole-brain sensitivity maps for WH data set.
-E.g.: run WH_Res_SensitivityMaps.py WH_MNE_Resolution_config 13 RMS
+E.g.: run WH_Res_SensitivityMaps.py WH_Res_config 13 RMS
 =========================================================
 
 """

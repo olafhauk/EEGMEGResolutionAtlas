@@ -3,8 +3,8 @@
 Grand-average of morphed STCs for resolution metrics
 for WH data set.
 Doesn't run in parallel mode.
-e.g.: run WH_Res_AvgSTC.py WH_MNE_Resolution_config SensitivityMaps SensMap RMS
-or: run WH_Res_AvgSTC.py WH_MNE_Resolution_config ResolutionMetrics locerr_peak
+e.g.: run WH_Res_AvgSTC.py WH_Res_config SensitivityMaps SensMap RMS
+or: run WH_Res_AvgSTC.py WH_Res_config ResolutionMetrics locerr_peak
 =========================================================
 
 """
