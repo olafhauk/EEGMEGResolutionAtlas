@@ -1,16 +1,15 @@
 """
-=========================================================
+=============================================================
 Compute resolution metrics for MNE sample data set.
-Peak Localisation Error (PLE) and Spatial Deviation (SD)
-are computed for L2-MNE and sLORETA, respectively.
-sLORETA has zero PLE, therefore outperforming L2-MNE.
-However, L2-MNE outperforms sLORETA with respect to SD.
-The CTFs for L2-MNE and sLORETA have the same shape,
-thus localisation error and width metrics are the same.
-For L2-MNE, PSFs and CTFs are the same, hence the metrics
-are, too.
-=========================================================
-OH, May 2019
+Peak Localisation Error (PLE) is computed for L2-MNE
+and sLORETA, and for point-spread and cross-talk functions
+(PSFs and CTFs), respectively.
+sLORETA has zero PLE for PSFs, therefore outperforming L2-MNE.
+However, the CTFs for L2-MNE and sLORETA have the same shape,
+thus PLE for CTFs is the same (and non-zero) for both
+MNE and sLORETA.
+==============================================================
+OH, Sep 2019
 """
 import numpy as np
 
@@ -23,7 +22,10 @@ print(__doc__)
 
 # get functions for resolution matrix, metrics etc.
 Res = importlib.import_module('Resolution_Example_Functions')
-reload(Res)
+importlib.reload(Res)
+
+R = importlib.import_module('WH_Resolution_Functions')
+importlib.reload(R)
 
 # get data from MNE sample dataset
 data_path = sample.data_path()
@@ -68,43 +70,72 @@ locations_lh = forward['src'][0]['rr'][vertno_lh,:]
 locations_rh = forward['src'][1]['rr'][vertno_rh,:]
 locations = np.vstack([locations_lh, locations_rh])
 
-for (func,axis) in zip(['PSF','CTF'], [0,1]):
+# compute resolution matrix for MNE
+RM_MNE = Res.make_resolution_matrix(forward, inverse_operator, method='MNE',
+                                lambda2=lambda2)
 
-    # initialise lists for resolution metrics
-    locerr, width = [], []
+# compute resolution matrix for sLORETA
+RM_LOR = Res.make_resolution_matrix(forward, inverse_operator, method='sLORETA',
+                                lambda2=lambda2)
 
-    for method in ['MNE', 'sLORETA']:
+# compute peak localisation error (cm) for MNE's PSF
+# axis=0: PSF (columns of RM); axis=1: CTF (rows)
+locerr_PSF_MNE = 100.*Res.localisation_error(RM_MNE, locations, axis=0,
+                                                metric='peak')[:,np.newaxis]
 
-        # compute resolution matrix
-        RM = Res.make_resolution_matrix(forward, inverse_operator, method=method,
-                                        lambda2=lambda2)
+# convert to source estimate
+stc_PSF_MNE = mne.SourceEstimate(locerr_PSF_MNE, vertno, tmin=0., tstep=1.)
 
-        # compute peak localisation error (cm)
-        # axis=0: PSF (columns of RM); axis=1: CTF (rows)
-        locerr.append(100.*Res.localisation_error(RM, locations, axis=axis,
-                                                metric='peak')[:,np.newaxis])
 
-        # convert to source estimate
-        stc = mne.SourceEstimate(locerr[-1], vertno, tmin=0., tstep=1.)
+# compute peak localisation error (cm) for sLORETA's PSF
+# axis=0: PSF (columns of RM); axis=1: CTF (rows)
+locerr_PSF_LOR = 100.*Res.localisation_error(RM_LOR, locations, axis=0,
+                                                metric='peak')[:,np.newaxis]
+# convert to source estimate
+stc_PSF_LOR = mne.SourceEstimate(locerr_PSF_LOR, vertno, tmin=0., tstep=1.)
 
-        stc.save('%s_locerr_%s' % (func, method))
 
-        ### compute spatial deviation
+# compute peak localisation error (cm) for MNE's CTF
+# axis=1: PSF (columns of RM); axis=1: CTF (rows)
+locerr_CTF_MNE = 100.*Res.localisation_error(RM_MNE, locations, axis=1,
+                                                metric='peak')[:,np.newaxis]
 
-        # compute spatial deviation (cm)
-        width.append(100.*Res.spatial_width(RM, locations, axis=axis,
-                                            metric='sd')[:,np.newaxis])
+# convert to source estimate
+stc_CTF_MNE = mne.SourceEstimate(locerr_CTF_MNE, vertno, tmin=0., tstep=1.)
 
-        # convert to source estimate
-        stc = mne.SourceEstimate(width[-1], vertno, tmin=0., tstep=1.)
 
-        stc.save('%s_width_%s' % (func, method))
+# compute peak localisation error (cm) for sLORETA's CTF
+# axis=1: PSF (columns of RM); axis=1: CTF (rows)
+locerr_CTF_LOR = 100.*Res.localisation_error(RM_LOR, locations, axis=1,
+                                                metric='peak')[:,np.newaxis]
 
-    # Compute differences between methods
-    stc = mne.SourceEstimate(locerr[0]-locerr[1], vertno, tmin=0., tstep=1.)
+# convert to source estimate
+stc_CTF_LOR = mne.SourceEstimate(locerr_CTF_LOR, vertno, tmin=0., tstep=1.)
 
-    stc.save('%s_locerr_MNE-sLORETA' % func)
+# Visualise
+from mayavi import mlab
 
-    stc = mne.SourceEstimate(width[0]-width[1], vertno, tmin=0., tstep=1.)
 
-    stc.save('%s_width_MNE-sLORETA' % func)
+brain_PSF_MNE = stc_PSF_MNE.plot('sample', 'inflated', 'both',
+                                    subjects_dir=subjects_dir, 
+                                    clim=dict(kind='value', lims=(0, 2, 4)),
+                                    title='PLE PSF MNE', figure=1)
+mlab.title('PLE PSF MNE')
+
+brain_PSF_LOR = stc_PSF_LOR.plot('sample', 'inflated', 'both',
+                                    subjects_dir=subjects_dir, 
+                                    clim=dict(kind='value', lims=(0, 2, 4)),
+                                    title='PLE PSF sLORETA', figure=2)
+mlab.title('PLE PSF sLORETA')
+
+brain_CTF_MNE = stc_CTF_MNE.plot('sample', 'inflated', 'both',
+                                    subjects_dir=subjects_dir, 
+                                    clim=dict(kind='value', lims=(0, 2, 4)),
+                                    title='PLE CTF MNE', figure=3)
+mlab.title('PLE CTF MNE')
+
+brain_CTF_LOR = stc_CTF_LOR.plot('sample', 'inflated', 'both',
+                                    subjects_dir=subjects_dir, 
+                                    clim=dict(kind='value', lims=(0, 2, 4)),
+                                    title='PLE CTF sLORETA', figure=4)
+mlab.title('PLE CTF sLORETA')
