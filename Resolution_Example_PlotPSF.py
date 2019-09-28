@@ -20,8 +20,8 @@ print(__doc__)
 Res = importlib.import_module('Resolution_Example_Functions')
 importlib.reload(Res)
 
-R = importlib.import_module('WH_Resolution_Functions')
-importlib.reload(R)
+# R = importlib.import_module('WH_Resolution_Functions')
+# importlib.reload(R)
 
 # get data from MNE sample dataset
 data_path = sample.data_path()
